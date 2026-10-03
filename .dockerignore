@@ -1,0 +1,32 @@
+
+# Python environments and cache
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.ipynb_checkpoints
+
+# Git and development files
+.git
+.github
+.pre-commit-config.yaml
+
+# Secrets and logs
+.env
+*.log
+
+# Notebooks and development data
+notebooks
+data
+
+# Local datasets are mounted at runtime by Docker Compose
+olist db
+
+# Large training and evaluation artifacts
+artifacts/*.npy
+artifacts/*.npz
+artifacts/*.csv
+artifacts/*.dvc
+artifacts/*.png
+artifacts/eda_findings.txt
+artifacts/final_results*.json

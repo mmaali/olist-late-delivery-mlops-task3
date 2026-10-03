@@ -1,0 +1,26 @@
+# Project configuration file
+
+project:
+  name: "olist-late-delivery-prediction"
+  version: "1.0.0"
+
+model:
+  name: "logistic_regression"
+  version: "1.0.0"
+  threshold: 0.35
+
+paths:
+  model: "artifacts/final_logistic_model_experiment2.joblib"
+  preprocessor: "artifacts/preprocessor_experiment2.joblib"
+  threshold: "artifacts/final_threshold_experiment2.json"
+  feature_list: "artifacts/feature_list_experiment2.txt"
+  geolocation: "olist db/olist_geolocation_dataset.csv"
+
+logging:
+  level: "INFO"
+  file: "logs/predictions.log"
+
+monitoring:
+  baseline_late_prediction_rate: 0.27448
+  minimum_predictions_for_drift_check: 100
+  late_prediction_rate_deviation_threshold: 0.10

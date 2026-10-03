@@ -1,0 +1,54 @@
+# Jupyter
+.ipynb_checkpoints/
+
+
+# Raw Olist datasets
+# Raw Olist datasets are stored in .\olist db\
+product_category_name_translation.csv
+
+
+# Large generated artifacts
+artifacts/*.csv
+artifacts/*.npz
+artifacts/*.npy
+
+
+# Python
+__pycache__/
+*.py[cod]
+
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+
+# Environment variables
+.env
+
+
+# Testing and linting cache
+.pytest_cache/
+.ruff_cache/
+
+
+# VS Code
+.vscode/
+
+
+# Logs
+*.log
+
+
+# OS
+Thumbs.db
+.DS_Store
+
+
+# Duplicate geolocation copy used locally outside the dataset folder
+/olist_geolocation_dataset.csv
+
+
+# Do not ignore the required translation file inside the dataset folder
+!olist db/product_category_name_translation.csv
