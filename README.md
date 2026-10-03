@@ -227,3 +227,5 @@ pytest -q
 أصبحت عندي خدمة inference تستخدم النموذج المختار من Task 2، تتحقق من الطلب، وترجع prediction وprobability عبر API وCLI. أضفت تتبع MLflow وmodel registry، اختبارات، Docker Compose، logging، ومؤشرات مراقبة. تحققت من تطابق inference مع ميزات واحتمال notebook على صف اختبار واحد، ومن نجاح 28 اختبارًا محليًا.
 
 قبل التسليم على GitHub، أضيف ملفات Task 3 الجديدة إلى Git مع ملفات inference الأربعة الموجودة الآن في `artifacts/`. بعد push أراجع نتيجة GitHub Actions. لا أعتبر workflow ناجحًا عن بعد قبل ظهور run أخضر في GitHub. لا تتضمن ورقة Task 3 صيغة تسليم محددة؛ اخترت GitHub لتوثيق المشروع كما أرغب.
+ 
+All nine Olist CSV datasets are included under data/. The API geolocation input is also kept at olist db/olist_geolocation_dataset.csv because the existing Docker Compose setup mounts that path. 
