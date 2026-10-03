@@ -1,20 +1,14 @@
-# تقرير Task 3: تحويل نموذج Olist إلى خدمة Inference
+# Qafza Task 3: Olist Late Delivery Inference Service
 
-**إعداد:** ........................................
+## 1. Introduction and Project Goal
 
-**المساق:** MLOps Training 2026/2027
+In Task 2, I trained a model to predict whether an Olist order would arrive late. In Task 3, I packaged the selected model as an inference service. A client submits order information; the service validates it, builds prediction-time features, and returns a class prediction with its late probability.
 
-**التاريخ:** 2026-10-03
+This project performs inference only. Training and threshold selection remain part of Task 2. At prediction time, the service loads the saved model and fitted preprocessor. It does not retrain the model or fit encoders and scalers again.
 
-## 1. مقدمة وهدف المشروع
 
-في Task 2 درّبت نموذجًا للتنبؤ إذا كان طلب Olist سيتأخر في التسليم. في Task 3 جهّزت المشروع لاستخدام النموذج بعد التدريب: أرسل بيانات طلب جديد، فيتحقق النظام منها، يبني الميزات نفسها المستخدمة في التدريب، ثم يرجع التنبؤ واحتمال التأخير.
 
-هذا المشروع ينفذ **inference فقط**. التدريب واختيار threshold بقيا في notebooks الخاصة بـTask 2. أثناء التنبؤ أحمّل الـpreprocessor والـmodel المحفوظين؛ لا أعيد تدريب النموذج أو `fit` للـencoders والـscalers.
-
-راجعت ورقة متطلبات Task 3. الورقة تحدد مخرجات العمل وطريقة إثباتها، لكنها لا تحدد صيغة أو منصة تسليم بعينها. اخترت توثيق المشروع على GitHub كما هو موضح في هذا التقرير. يجب إضافة ملفات المشروع الجديدة وملفات inference الظاهرة في Git إلى commit قبل رفع المستودع.
-
-## 2. تصميم النظام
+## 2. System Architecture
 
 ```mermaid
 flowchart LR
@@ -23,8 +17,8 @@ flowchart LR
     V --> GE[Great Expectations]
     GE --> F[Feature engineering]
     F --> P[Saved preprocessor]
-    P --> M[Model from MLflow Production alias]
-    M --> R[Prediction, probability, model release]
+    P --> M[MLflow Production model]
+    M --> R[Prediction, probability, service version]
     API --> L[Console and persistent log]
     API --> MET[Request and prediction metrics]
     INIT[MLflow initialization job] --> DB[(SQLite metadata volume)]
@@ -32,87 +26,73 @@ flowchart LR
     M --> ART
 ```
 
-يستخدم Docker Compose ثلاث خدمات: `mlflow`، و`mlflow-init`، و`api`. يخزن MLflow بياناته الوصفية في SQLite داخل volume اسمه `mlflow_db`، والـartifacts في `mlflow_artifacts`. يسجل `mlflow-init` النموذج ويضع alias باسم `Production`. لا توجد خدمة PostgreSQL منفصلة في ملف Compose الأساسي. تحفظ سجلات API في volume اسمه `api_logs`.
+Docker Compose defines three services: `mlflow`, `mlflow-init`, and `api`. MLflow stores metadata in SQLite in the `mlflow_db` volume and artifacts in `mlflow_artifacts`. The initialization job registers the model and assigns the `Production` alias before the API starts. API logs use the `api_logs` volume. The Compose file does not define a separate PostgreSQL service.
 
-## 3. هيكل المشروع
+## 3. Project Structure
+
+The standalone Task 3 repository contains the inference service, runtime artifacts, tests, and all nine Olist CSV datasets.
 
 ```text
-Qafza_Task_2/
-├── app/
-│   └── main.py                 # FastAPI routes, schemas, startup, logging, metrics
-├── artifacts/                  # Model, fitted preprocessor, threshold, feature lists
-│   ├── final_logistic_model_experiment2.joblib
-│   ├── preprocessor_experiment2.joblib
-│   ├── final_threshold_experiment2.json
-│   └── *.dvc                    # DVC metadata for versioned outputs
-├── config/
-│   └── config.yaml              # Paths, model info, threshold, logging, monitoring
-├── data/                        # Project data directory
+olist-late-delivery-mlops-task3/
+├── app/main.py                 # FastAPI routes, schemas, startup, logging, metrics
+├── artifacts/                  # Inference model and supporting files
+├── config/config.yaml          # Model, threshold, paths, logging, monitoring
+├── data/                       # All nine Olist CSV datasets
 ├── docs/
-│   └── Task3_Report.md          # This report
-├── notebooks/                   # Task 2 exploration, feature engineering and training
-├── olist db/                    # Source Olist CSV datasets, including geolocation
+│   ├── Task3_Report.md
+│   └── Task3_Report.pdf
+├── olist db/
+│   └── olist_geolocation_dataset.csv  # Path mounted by Compose for inference
 ├── requirements/
-│   ├── requirements-prod.txt    # Runtime dependencies
-│   ├── requirements-dev.txt     # Test, lint and development dependencies
-│   └── requirements.txt         # Existing Task 2 dependency file
-├── src/
-│   ├── cli.py                   # JSON/stdin inference command
-│   ├── data.py                  # CSV and geolocation loading
-│   ├── data_validation.py       # Great Expectations checks
-│   ├── features.py              # Inference-time feature engineering
-│   ├── mlflow_tracking.py       # Experiment logging and model registration
-│   ├── monitoring.py            # In-process counters, latency and drift calculation
-│   ├── pipeline.py              # End-to-end inference orchestration
-│   ├── prediction.py            # Model probabilities and thresholding
-│   ├── preprocessing.py         # Load and apply the fitted preprocessor
-│   └── validation.py            # Basic request validation
-├── tests/                       # Unit, data, CLI, monitoring and API tests
-├── .dvc/                        # DVC configuration and local cache metadata
-├── .github/workflows/ci.yml     # GitHub Actions checks and image publishing
-├── .pre-commit-config.yaml      # Ruff hooks before commits
-├── docker-compose.yml           # MLflow, initialization and API services
-├── Dockerfile                   # Python inference image
-└── README.md                    # Project setup and usage
+│   ├── requirements-prod.txt
+│   └── requirements-dev.txt
+├── src/                        # Inference, features, validation, MLflow, monitoring
+├── tests/                      # Unit, data, CLI, monitoring, and API tests
+├── .github/workflows/ci.yml
+├── docker-compose.yml
+├── Dockerfile
+└── README.md
 ```
 
-## 4. مسار التنبؤ
+The geolocation CSV appears in `data/` as part of the full dataset and at `olist db/olist_geolocation_dataset.csv` because the existing Compose configuration mounts that path into the API container. The model, fitted preprocessor, threshold, feature list, and results summary are included in `artifacts/`.
 
-1. يستقبل `/predict` طلبًا واحدًا، أو يستقبل `/predict-batch` قائمة طلبات.
-2. يتحقق Pydantic من schema وأنواع وقيم حقول الطلب، مثل منع القيم السالبة.
-3. تتحقق `validate_order` من الحقول الأساسية والأرقام والولايات والتواريخ.
-4. يفحص Great Expectations تطابق أعمدة الإدخال، الحدود الدنيا للأرقام، الولايات المسموحة، والقيم غير الفارغة للحقول المحددة. عند فشل التحقق يرجع النظام خطأ واضحًا ولا يمرر البيانات للنموذج.
-5. تبني `build_features` الميزات الزمنية والجغرافية، ومنها `estimated_delivery_days` و`approval_delay_hours` و`distance_km` و`same_state`.
-6. يحمّل `prepare_features` الـpreprocessor المحفوظ من Task 2 ويستخدم `transform` فقط.
-7. يحمل الـAPI النموذج المسجل في MLflow من alias `Production`.
-8. تحسب `predict` احتمال الفئة `Late` وتستخدم threshold `0.35` لإرجاع `Late` أو `On Time`.
-9. تسجل الخدمة المدخلات والنتيجة والوقت وإصدار الخدمة في log.
+## 4. Inference Flow
 
-تستخدم نسخة Experiment 2 عشرين feature خامًا، ويحوّلها الـpreprocessor إلى 84 feature معالجة. فحصت أول صف من test split بعد استخدام أعمدة الإدخال الصحيحة: الفرق الأقصى بين الميزات المعالجة في inference ومصفوفة Task 2 المحفوظة كان `0`، والفرق بين احتمالي النموذج كان `0` أيضًا.
+1. `POST /predict` accepts one order; `POST /predict-batch` accepts an array of orders.
+2. Pydantic checks request fields, types, and basic constraints such as nonnegative values.
+3. `validate_order` checks required fields, numbers, states, and timestamps.
+4. Great Expectations checks input columns, numeric bounds, allowed states, and required non-null values. Invalid input returns an error and is not sent to the model.
+5. `build_features` creates time and geography features, including `estimated_delivery_days`, `approval_delay_hours`, `distance_km`, and `same_state`.
+6. `prepare_features` loads the saved Task 2 preprocessor and calls `transform`; it does not call `fit`.
+7. The API loads the registered MLflow model through the `Production` alias.
+8. `predict` calculates the `Late` probability and applies threshold `0.35` to return `Late` or `On Time`.
+9. The service logs the input, prediction, latency, and service version.
 
-## 5. الإعدادات والنسخ
+Experiment 2 uses 20 raw features; the preprocessor expands them to 84 processed features. I compared inference output with the saved Task 2 test features on one test row. The maximum feature difference was `0`; the difference in model probability was also `0`.
 
-أضع الإعدادات القابلة للتغيير في `config/config.yaml` بدل توزيعها بين الملفات:
+## 5. Configuration and Versions
 
-| الإعداد | القيمة الحالية | الاستخدام |
+Runtime settings are centralized in `config/config.yaml`.
+
+| Setting | Value | Use |
 |---|---:|---|
-| اسم النموذج | `logistic_regression` | اسم النموذج في معلومات الخدمة |
-| إصدار الخدمة | `1.0.0` | القيمة التي ترجعها API مع التنبؤ |
-| threshold | `0.35` | الحد الفاصل بين `Late` و`On Time` |
-| baseline للتأخير | `0.27448` | مرجع مراقبة توزيع التنبؤات |
-| أقل عدد للتنبؤات | `100` | لا يحسب تنبيه drift قبله |
-| حد تغير المعدل | `0.10` | فرق مطلق قدره 10 نقاط مئوية |
-| log file | `logs/predictions.log` | ملف سجل inference |
+| Model name | `logistic_regression` | Name returned by the service |
+| Service version | `1.0.0` | Version returned with predictions |
+| Classification threshold | `0.35` | Separates `Late` from `On Time` |
+| Late-prediction baseline | `0.27448` | Reference for monitoring |
+| Minimum prediction count | `100` | Minimum before checking drift |
+| Drift deviation threshold | `0.10` | Absolute change of 10 percentage points |
+| Log file | `logs/predictions.log` | Inference log path |
 
-أستخدم DVC metadata (`.dvc` files) لتتبع مخرجات Task 2. على هذا الجهاز أعاد `dvc status` النتيجة `Data and pipelines are up to date.`. لا يوجد DVC remote مشترك حاليًا؛ لذلك الملفات الكبيرة التي بقيت DVC-only لا يمكن تنزيلها تلقائيًا على جهاز آخر. ملفات inference الأربعة صغيرة ومسموح بها في Git حتى يمكن بناء صورة Docker وتشغيل الاختبارات من clone جديد بعد إضافتها إلى commit.
+The inference artifacts and complete dataset are included in this repository, so a DVC remote is not required to clone and run this standalone Task 3 project.
 
-## 6. MLflow وDocker Compose
+## 6. MLflow and Docker Compose
 
-يسجل `src/mlflow_tracking.py` run في experiment باسم `Olist Late Delivery - Experiment 2`. يسجل نوع النموذج واسم التجربة وعدد الميزات والـthreshold، إلى جانب مقاييس Task 2 والـpreprocessor والـthreshold وقائمة الميزات. بعدها يسجل النموذج في registry باسم `olist_late_delivery_model` ويضبط alias `Production` على أحدث version.
+`src/mlflow_tracking.py` creates a run in the `Olist Late Delivery - Experiment 2` experiment. It records the model type, experiment name, feature counts, threshold, Task 2 metrics, preprocessor, threshold configuration, and feature list. It registers the model as `olist_late_delivery_model` and assigns `Production` to the latest version.
 
-في الحالة التي فحصتها كان MLflow registry يعرض version `5` تحت alias `Production`. ترجع API `1.0.0` كإصدار الخدمة من config؛ هاتان قيمتان مختلفتان. حملت API النموذج من registry، وأظهرت logs تنزيل artifacts من MLflow، وحالة `olist-mlflow` كانت `healthy`.
+During validation, the registry showed model version `5` under `Production`. The API reports `1.0.0` as its service version; that differs from the MLflow model version. The API loaded the model from the registry, its logs showed artifact downloads, and `olist-mlflow` reported a healthy state.
 
-للتشغيل من جذر المشروع بعد تثبيت Docker Desktop:
+With Docker Desktop running, start the project from its root:
 
 ```powershell
 docker compose up -d --build
@@ -120,9 +100,9 @@ docker compose ps -a
 docker compose logs --tail=100 mlflow
 ```
 
-يستخدم `--build` عند أول تشغيل أو عند تغيير Dockerfile/dependencies. بعد ذلك يمكن تشغيل `docker compose up -d`. لا تستخدم أوامر حذف volumes عند إعادة التشغيل؛ الـvolumes تحفظ قاعدة MLflow وartifacts وسجلات API.
+Use `--build` for the first run or after changing the Dockerfile or dependencies. Later starts can use `docker compose up -d`. Avoid removing Docker volumes during routine restarts because they contain MLflow metadata, artifacts, and API logs.
 
-للتحقق من الخدمة:
+Health and model information are available at:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/health
@@ -130,11 +110,11 @@ Invoke-RestMethod http://localhost:8000/model-info
 Invoke-RestMethod http://localhost:8000/metrics
 ```
 
-توثيق OpenAPI وتجربة الطلبات متاحان على `http://localhost:8000/docs`، وواجهة MLflow على `http://localhost:5000`.
+Interactive API documentation is at `http://localhost:8000/docs`; the MLflow UI is at `http://localhost:5000`.
 
-## 7. أمثلة على API وCLI
+## 7. API and CLI Examples
 
-مثال طلب فردي مطابق للـschema:
+A single prediction request has this shape:
 
 ```json
 {
@@ -157,7 +137,7 @@ Invoke-RestMethod http://localhost:8000/metrics
 }
 ```
 
-الطلب يرسل إلى `POST /predict`. النتيجة التي تحققت منها فعليًا كانت:
+Send it to `POST /predict`. The response observed during validation was:
 
 ```json
 {
@@ -167,23 +147,25 @@ Invoke-RestMethod http://localhost:8000/metrics
 }
 ```
 
-أما `POST /predict-batch` فيستقبل JSON array مباشرة، مثل `[order1, order2]`، وليس object يحتوي `orders`. استخدمت الطلب نفسه مرتين وتأكدت أن الاستجابة تضمنت نتيجتين.
+`POST /predict-batch` accepts a JSON array such as `[order1, order2]`; it does not expect an object with an `orders` field. I sent the same order twice and confirmed that the response contained two predictions.
 
-يدعم CLI ملف JSON أو stdin. مثال stdin داخل حاوية API:
+The CLI accepts a JSON file or standard input. Example using standard input inside the API container:
 
 ```powershell
 Get-Content .\order.json -Raw | docker compose exec -T api python -m src.cli -
 ```
 
-## 8. السجلات والمراقبة
+## 8. Logging and Monitoring
 
-تستخدم API مكتبة `logging` لإرسال الرسائل إلى console وإلى `logs/predictions.log` داخل volume `api_logs`. يسجل كل تنبؤ البيانات الواردة، التنبؤ والاحتمال، latency، وإصدار الخدمة.
+The API writes Python logging messages to the console and to `logs/predictions.log` in the `api_logs` volume. Each prediction log includes the input, prediction and probability, latency, and service version.
 
-يعرض `/metrics` عدد الطلبات، الأخطاء، نسبة الأخطاء، متوسط زمن الاستجابة، وتوزيع `Late` و`On Time`. وتحسب `prediction_drift` الفرق بين نسبة `Late` المرصودة وbaseline. لا يرفع النظام تنبيه drift قبل 100 prediction، ويرفعه إذا تجاوز الفرق 0.10. قررت في التوثيق مراجعة معدل أخطاء مستمر فوق 5% أو متوسط latency فوق ثانية واحدة. العدادات داخل الذاكرة وتعود للصفر عند إعادة تشغيل API، بينما ملف log مستمر في Docker volume.
+The `/metrics` endpoint reports request count, errors, error rate, average response time, and the split between `Late` and `On Time`. `prediction_drift` compares the observed late-prediction rate with the baseline. It waits for at least 100 predictions and reports drift when the absolute difference exceeds `0.10`.
 
-## 9. الاختبارات وCI/CD
+I documented sustained error rates above 5% or average latency above one second as values to review. Metrics counters are held in memory and reset when the API restarts. The log file persists in the Docker volume.
 
-تقسم الاختبارات في `tests/` إلى فحوصات validation وfeatures وprediction وCLI وmonitoring وAPI. شغلت محليًا:
+## 9. Tests and CI/CD
+
+Tests under `tests/` cover validation, features, prediction, CLI, monitoring, and API behavior. The following local checks were run:
 
 ```powershell
 ruff check app src tests
@@ -191,20 +173,13 @@ ruff format --check app src tests
 pytest -q
 ```
 
-النتيجة المسجلة: `28 passed`. كما نجح `docker compose config --quiet`، وأعادت endpoints الحية `200` للـhealth وOpenAPI والتنبؤات الفردية والجماعية. ظهرت تحذيرات بأن بعض sklearn artifacts حُفظت على `1.9.0` بينما بيئة الاختبار تستخدم `1.9.1`؛ الاختبارات والتنبؤ الفعلي نجحا رغم التحذير.
+The recorded result was `28 passed`. `docker compose config --quiet` also succeeded, and live health, OpenAPI, single-prediction, and batch-prediction checks returned HTTP 200. Some scikit-learn artifacts were saved with version `1.9.0`, while the test environment used `1.9.1`; prediction and tests succeeded with this warning.
 
-يشغل `.github/workflows/ci.yml` lint وformat check وpytest عند push، ويشغل فحوصات pull request إلى `main` و`master`. بعد نجاح الاختبارات، ينفذ build وpush لصورة GHCR عند push إلى `main` أو `master`. إعداد workflow موجود، لكن لم يتم تأكيد run فعلي على GitHub بعد؛ يظهر ذلك بعد رفع commit إلى المستودع.
+The `.github/workflows/ci.yml` workflow runs lint, formatting checks, and pytest on pushes and pull requests to `main` and `master`. After tests pass, it builds and pushes a GHCR image for pushes to those branches. The workflow file is present, but I have not confirmed a successful GitHub Actions run.
 
-يشغل `.pre-commit-config.yaml` فحوصات Ruff قبل commit. لتثبيته وتشغيله يدويًا:
+## 10. Local Setup
 
-```powershell
-pre-commit install
-pre-commit run --all-files
-```
-
-## 10. طريقة الإعداد والتشغيل محليًا
-
-إذا شغلت المشروع بدون Docker، أنشئ بيئة Python وثبت المكتبات:
+To run without Docker, create a virtual environment and install production and development requirements:
 
 ```powershell
 python -m venv .venv
@@ -212,7 +187,7 @@ python -m venv .venv
 python -m pip install -r requirements/requirements-prod.txt -r requirements/requirements-dev.txt
 ```
 
-لتشغيل الاختبارات:
+Run local checks with:
 
 ```powershell
 ruff check app src tests
@@ -220,10 +195,10 @@ ruff format --check app src tests
 pytest -q
 ```
 
-للتشغيل الكامل، استخدم Docker Compose من جذر المشروع. راجع `README.md` للتعليمات المختصرة، و`config/config.yaml` لقيم الإعدادات، و`docker-compose.yml` لتعريف الخدمات والـvolumes.
+For the complete service, use Docker Compose from the repository root. See `README.md` for the quick start, `config/config.yaml` for runtime settings, and `docker-compose.yml` for service and volume definitions.
 
-## 11. خلاصة وحالة الإنجاز
+## 11. Summary and Completion Status
 
-أصبحت عندي خدمة inference تستخدم النموذج المختار من Task 2، تتحقق من الطلب، وترجع prediction وprobability عبر API وCLI. أضفت تتبع MLflow وmodel registry، اختبارات، Docker Compose، logging، ومؤشرات مراقبة. تحققت من تطابق inference مع ميزات واحتمال notebook على صف اختبار واحد، ومن نجاح 28 اختبارًا محليًا.
+The project packages the Task 2 model as an inference service. The API validates requests and returns predictions and probabilities; the CLI supports file and standard-input requests. The repository also includes MLflow tracking and model registry, tests, Docker Compose, logging, monitoring, and all nine Olist CSV datasets.
 
-قبل التسليم على GitHub، أضيف ملفات Task 3 الجديدة إلى Git مع ملفات inference الأربعة الموجودة الآن في `artifacts/`. بعد push أراجع نتيجة GitHub Actions. لا أعتبر workflow ناجحًا عن بعد قبل ظهور run أخضر في GitHub. لا تتضمن ورقة Task 3 صيغة تسليم محددة؛ اخترت GitHub لتوثيق المشروع كما أرغب.
+I verified inference against one Task 2 test row, ran 28 tests, checked the Compose configuration, and confirmed the live API endpoints during validation. I will review the latest GitHub Actions run before final submission and describe the workflow as successful only after a green run appears in GitHub.
